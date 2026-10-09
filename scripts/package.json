@@ -1,0 +1,14 @@
+{
+  "name": "seller-assistant-push",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  },
+  "private": true,
+  "type": "module"
+}
