@@ -24,7 +24,7 @@ jobs:
       - run: npm ci --prefix scripts
       - name: Bildirim gönder
         env:
-          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
+          PUSH_CONFIG: ${{ secrets.PUSH_CONFIG }}
         run: |
           KIND="${{ github.event.inputs.kind }}"
           case "${{ github.event.schedule }}" in

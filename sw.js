@@ -1,7 +1,7 @@
 /* Offline cache + reminder notifications.
    The server only says "it's reminder time"; the list of open tasks is read here, from this phone's own data. */
 importScripts("store.js");
-const CACHE="sa-v1";
+const CACHE="sa-v2";
 const FILES=["./","index.html","style.css","store.js","pwa.js","panel.js","seed-tasks.json","manifest.webmanifest","icons/icon-192.png","icons/icon-512.png","icons/apple-touch-icon.png"];
 
 self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()))});

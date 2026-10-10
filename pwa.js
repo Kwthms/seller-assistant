@@ -1,11 +1,11 @@
 /* Phone-app pieces: install hint, notifications, backup, file saving. Loaded before panel.js. */
-const VAPID_PUBLIC="BAemue9PYx6qct4T8i8tYu3uOV2AGg0kFsdNqpRYkwSEZbUEeCpZxy9bzx_2PoQwGFDlxn9cvzFTR05amWdF2F0";
 const isStandalone=()=>window.matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
-let swReg=null,pushSub=null;
+let swReg=null,pushSub=null,vapid=null;
 
 if("serviceWorker" in navigator){
   navigator.serviceWorker.register("sw.js").then(async r=>{swReg=r;await navigator.serviceWorker.ready;
-    if(r.pushManager){pushSub=await r.pushManager.getSubscription().catch(()=>null)}
+    vapid=await SA.load("vapid").catch(()=>null);
+    if(r.pushManager){pushSub=await r.pushManager.getSubscription().catch(()=>null);if(pushSub&&!vapid){await pushSub.unsubscribe().catch(()=>{});pushSub=null}}
     if(typeof render==="function")render()}).catch(()=>{});
 }
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
@@ -19,15 +19,25 @@ const localDownloads={async save({filename,data,type}){
 async function loadLastNotif(){try{lastNotif=await SA.load("lastNotif");if(typeof render==="function")render()}catch(e){}}
 
 function b64ToBytes(b){const p="=".repeat((4-b.length%4)%4);const s=atob((b+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(s,c=>c.charCodeAt(0))}
-function subCode(){return pushSub?JSON.stringify(pushSub.toJSON()):""}
+const b64u=buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+/* The sending key pair is made on this phone, so no secret ever passes through a chat */
+async function ensureVapid(){
+  if(vapid)return vapid;
+  const k=await crypto.subtle.generateKey({name:"ECDSA",namedCurve:"P-256"},true,["sign","verify"]);
+  const pub=b64u(await crypto.subtle.exportKey("raw",k.publicKey));
+  const priv=(await crypto.subtle.exportKey("jwk",k.privateKey)).d;
+  vapid={pub,priv};await SA.save(vapid,"vapid");return vapid;
+}
+function subCode(){return pushSub&&vapid?btoa(JSON.stringify({pub:vapid.pub,priv:vapid.priv,sub:pushSub.toJSON()})):""}
 
 async function enablePush(){
   try{
     const perm=await Notification.requestPermission();
     if(perm!=="granted"){setMsg("Bildirim izni verilmedi. Ayarlar → Bildirimler → Satıcı Görevleri'nden açabilirsin.",true);render();return}
     const r=swReg||await navigator.serviceWorker.ready;
-    pushSub=await r.pushManager.getSubscription()||await r.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToBytes(VAPID_PUBLIC)});
-    setMsg("Bildirimler açıldı. Şimdi bağlantı kodunu kopyalayıp bir kez gönder.");
+    const v=await ensureVapid();
+    pushSub=await r.pushManager.getSubscription()||await r.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToBytes(v.pub)});
+    setMsg("Bildirimler açıldı. Şimdi bağlantı kodunu kopyalayıp GitHub'a ekle.");
   }catch(e){setMsg("Bildirim açılamadı: "+e.message,true)}
   render();
 }
@@ -48,7 +58,7 @@ function notifCard(){
   if(perm==="denied"){c.append(el("p",{},"Bildirim izni kapalı. iPhone Ayarlar → Bildirimler → Satıcı Görevleri'nden aç."));return c}
   if(!pushSub){c.append(el("div",{class:"btns"},el("button",{class:"btn pri1",onclick:enablePush},"Bildirimleri aç")));return c}
   c.append(el("p",{},"Bildirim izni açık."));
-  c.append(el("div",{class:"small"},"Bağlantı kodu (kurulumda bir kez gönderilir):"),
+  c.append(el("div",{class:"small"},"Bağlantı kodu: kurulumda bir kez GitHub'a gizli anahtar (PUSH_CONFIG) olarak eklenir. Kimseyle paylaşma, sohbete yapıştırma."),
     el("textarea",{id:"subcode",readonly:true,style:"min-height:70px;font-size:.7rem"},subCode()),
     el("div",{class:"btns"},
       el("button",{class:"btn pri1",onclick:copySub},"Kodu kopyala"),
